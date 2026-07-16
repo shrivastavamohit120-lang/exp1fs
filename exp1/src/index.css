@@ -1,0 +1,42 @@
+:root {
+  --bg: #16171b;
+  --bg-alt: #1c1e23;
+  --card: #1e2024;
+  --card-border: #2b2e35;
+  --text: #f5f3ef;
+  --text-muted: #8b8d93;
+  --accent: #e8a33d;
+  --danger: #e24c4c;
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+}
+
+textarea, input {
+  font-family: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
