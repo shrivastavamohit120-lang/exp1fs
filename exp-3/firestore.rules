@@ -1,0 +1,42 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function myRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    // users/{uid} -> { email, role, createdAt }
+    match /users/{uid} {
+      // Anyone signed in can read their own profile (to learn their role).
+      // Admins can read any profile.
+      allow read: if isSignedIn() && (request.auth.uid == uid || myRole() == 'admin');
+
+      // A user can create their own profile doc on first sign-in, but may
+      // NOT choose their own role - it is forced to "viewer" here so the
+      // client can't self-promote to admin.
+      allow create: if isSignedIn()
+                    && request.auth.uid == uid
+                    && request.resource.data.role == 'viewer';
+
+      // Only an admin may change someone's role (e.g. from the console,
+      // or from a trusted Cloud Function using the Admin SDK).
+      allow update: if isSignedIn() && myRole() == 'admin';
+
+      allow delete: if isSignedIn() && myRole() == 'admin';
+    }
+
+    // Example content collection referenced by the Admin Panel demo.
+    // create/update -> admin or editor, delete -> admin only, read -> any signed-in user.
+    match /posts/{postId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && myRole() in ['admin', 'editor'];
+      allow delete: if isSignedIn() && myRole() == 'admin';
+    }
+  }
+}
