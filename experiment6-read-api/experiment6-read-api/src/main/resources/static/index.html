@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Experiment 6 — Scalable Read APIs with Caching & Optimization</title>
+  <meta name="description" content="Unit 2 Experiment 6: High-performance read APIs with Spring Boot, Pagination, JPA JOIN FETCH, Ehcache, and Native SQL benchmarking.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+  <div class="ambient-glow glow-3"></div>
+
+  <!-- Main Container -->
+  <div class="app-layout">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-badge">Unit 2 &bull; Exp 6</div>
+        <h1 class="brand-title">
+          <span class="gradient-text">Scalable Read APIs</span>
+          <span class="brand-subtitle">Caching &amp; Optimization Suite</span>
+        </h1>
+      </div>
+
+      <div class="header-actions">
+        <div class="status-indicator">
+          <span class="status-dot"></span>
+          <span class="status-text" id="backendStatus">Backend Online</span>
+        </div>
+        <button id="clearCacheGlobalBtn" class="btn btn-glass" title="Evict all Ehcache entries">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          Clear Cache
+        </button>
+        <a href="/h2-console" target="_blank" class="btn btn-glass" title="Open H2 Database Console">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+          H2 Console
+        </a>
+        <a href="/api" target="_blank" class="btn btn-outline" title="View JSON Endpoint Directory">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          JSON API
+        </a>
+      </div>
+    </header>
+
+    <!-- Global Stats Bar -->
+    <div class="stats-ribbon">
+      <div class="ribbon-card">
+        <div class="ribbon-icon db-icon">🗄️</div>
+        <div class="ribbon-info">
+          <span class="ribbon-label">Database</span>
+          <span class="ribbon-value">H2 In-Memory (Indexed)</span>
+        </div>
+      </div>
+      <div class="ribbon-card">
+        <div class="ribbon-icon cache-icon">⚡</div>
+        <div class="ribbon-info">
+          <span class="ribbon-label">Caching Layer</span>
+          <span class="ribbon-value">Ehcache 3 (JCache JSR-107)</span>
+        </div>
+      </div>
+      <div class="ribbon-card">
+        <div class="ribbon-icon data-icon">📦</div>
+        <div class="ribbon-info">
+          <span class="ribbon-label">Seeded Dataset</span>
+          <span class="ribbon-value" id="statsDataset">500 Posts &bull; ~1.5k Comments &bull; 10 Authors</span>
+        </div>
+      </div>
+      <div class="ribbon-card">
+        <div class="ribbon-icon speed-icon">⏱️</div>
+        <div class="ribbon-info">
+          <span class="ribbon-label">Cache Latency</span>
+          <span class="ribbon-value" id="statsLatency"><span class="highlight-green">&lt; 3 ms</span> (vs ~550 ms DB)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="tabs-nav" role="tablist">
+      <button class="tab-btn active" data-tab="tab-pagination" role="tab" id="tabNavPagination">
+        <span class="tab-num">1</span>
+        <span class="tab-title">Pagination &amp; Sorting</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-nplusone" role="tab" id="tabNavNPlusOne">
+        <span class="tab-num">2</span>
+        <span class="tab-title">N+1 Problem &amp; JOIN FETCH</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-caching" role="tab" id="tabNavCaching">
+        <span class="tab-num">3</span>
+        <span class="tab-title">Ehcache @Cacheable</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-native" role="tab" id="tabNavNative">
+        <span class="tab-num">4</span>
+        <span class="tab-title">Native SQL Query</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-benchmarks" role="tab" id="tabNavBenchmarks">
+        <span class="tab-num">5</span>
+        <span class="tab-title">Benchmarking &amp; JMeter</span>
+      </button>
+    </nav>
+
+    <!-- TAB 1: PAGINATION & SORTING -->
+    <section id="tab-pagination" class="tab-content active" role="tabpanel">
+      <div class="section-hero">
+        <div class="hero-text">
+          <div class="badge badge-indigo">Assignment 1</div>
+          <h2>Scalable Paginated Read Feed</h2>
+          <p>Dividing high-volume datasets into manageable chunks using Spring Data's <code>Pageable</code>. Prevents server memory exhaustion and network congestion while supporting indexed sorting.</p>
+        </div>
+        <div class="code-snippet-box">
+          <div class="code-header">
+            <span>PostController.java</span>
+            <span class="code-tag">Spring Pageable</span>
+          </div>
+          <pre><code>@GetMapping("/posts")
+public PageResponse&lt;PostDto&gt; getPosts(
+    @PageableDefault(size = 10, sort = "createdAt", 
+                     direction = Sort.Direction.DESC) Pageable pageable) {
+    return PageResponse.from(postService.getPosts(pageable));
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- Controls Bar -->
+      <div class="filter-card">
+        <div class="filter-group">
+          <label for="sortFieldSelect">Sort By</label>
+          <select id="sortFieldSelect" class="form-select">
+            <option value="likes" selected>Likes (Popularity)</option>
+            <option value="createdAt">Created Date (Recent)</option>
+            <option value="title">Post Title (Alphabetical)</option>
+            <option value="id">Post ID (Sequential)</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="sortDirSelect">Direction</label>
+          <select id="sortDirSelect" class="form-select">
+            <option value="desc" selected>Descending (DESC)</option>
+            <option value="asc">Ascending (ASC)</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="pageSizeSelect">Page Size</label>
+          <select id="pageSizeSelect" class="form-select">
+            <option value="5">5 per page</option>
+            <option value="10" selected>10 per page</option>
+            <option value="20">20 per page</option>
+            <option value="50">50 per page</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="authorFilterSelect">Filter by Author (JPQL)</label>
+          <select id="authorFilterSelect" class="form-select">
+            <option value="">All Authors</option>
+            <option value="1">Author #1 (Aarav Sharma)</option>
+            <option value="2">Author #2 (Priya Singh)</option>
+            <option value="3">Author #3 (Rohan Gupta)</option>
+            <option value="4">Author #4 (Ananya Verma)</option>
+            <option value="5">Author #5 (Vikram Mehta)</option>
+          </select>
+        </div>
+
+        <button id="refreshPostsBtn" class="btn btn-primary" title="Reload current page">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          Fetch Data
+        </button>
+      </div>
+
+      <!-- Current API Query Visualizer -->
+      <div class="query-tracker">
+        <span class="query-method">GET</span>
+        <code id="currentQueryUrl">/posts?page=0&amp;size=10&amp;sort=likes,desc</code>
+        <span class="response-time-pill" id="pageQueryTime">-- ms</span>
+      </div>
+
+      <!-- Posts List Container -->
+      <div id="postsContainer" class="posts-grid">
+        <div class="loading-spinner">Loading posts...</div>
+      </div>
+
+      <!-- Pagination Nav -->
+      <div class="pagination-footer">
+        <div class="pagination-info" id="paginationInfo">Showing 1-10 of 500 records</div>
+        <div class="pagination-controls">
+          <button id="prevPageBtn" class="btn btn-glass" disabled>&larr; Previous</button>
+          <span class="page-current" id="currentPageIndicator">Page 1 / 50</span>
+          <button id="nextPageBtn" class="btn btn-glass">Next &rarr;</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: N+1 PROBLEM & JOIN FETCH -->
+    <section id="tab-nplusone" class="tab-content" role="tabpanel">
+      <div class="section-hero">
+        <div class="hero-text">
+          <div class="badge badge-rose">Assignment 2</div>
+          <h2>N+1 Problem &amp; JOIN FETCH Resolution</h2>
+          <p>Demonstrating the infamous Object-Relational Mapping (ORM) bottleneck. When fetching 500 posts with their comments, naive lazy loading executes <strong>1 + 500 = 501+ distinct SQL queries</strong>. Spring Data's <code>JOIN FETCH</code> collapses them into <strong>exactly 1 single query</strong>.</p>
+        </div>
+      </div>
+
+      <!-- Interactive Benchmark Controls -->
+      <div class="action-card">
+        <div class="action-info">
+          <h3>Interactive ORM Query Inspector</h3>
+          <p>Run both endpoints to observe real Hibernate statistics captured via <code>org.hibernate.stat.Statistics</code>.</p>
+        </div>
+        <div class="action-buttons">
+          <button id="runNPlusOneBtn" class="btn btn-danger">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Execute Naive Lazy (N+1)
+          </button>
+          <button id="runJoinFetchBtn" class="btn btn-emerald">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Execute JOIN FETCH (Optimized)
+          </button>
+          <button id="runBothComparisonBtn" class="btn btn-primary">
+            Run Head-to-Head Comparison
+          </button>
+        </div>
+      </div>
+
+      <!-- Side-by-side Visual Comparison -->
+      <div class="comparison-grid">
+        <!-- Naive N+1 Card -->
+        <div class="card card-comparison card-unoptimized">
+          <div class="card-header">
+            <div class="status-chip chip-danger">Naive Lazy Loading (N+1)</div>
+            <div class="endpoint-chip">GET /posts/demo/n-plus-one</div>
+          </div>
+          <div class="card-body">
+            <div class="metric-huge text-danger" id="n1SqlCount">--</div>
+            <div class="metric-label">SQL Statements Executed</div>
+
+            <div class="metric-row">
+              <span class="m-label">Execution Time:</span>
+              <span class="m-value" id="n1Time">-- ms</span>
+            </div>
+            <div class="metric-row">
+              <span class="m-label">Posts Loaded:</span>
+              <span class="m-value" id="n1Posts">500</span>
+            </div>
+            <div class="metric-row">
+              <span class="m-label">Comments Read:</span>
+              <span class="m-value" id="n1Comments">~1,500</span>
+            </div>
+
+            <div class="code-explain">
+              <div class="code-title">Hibernate Behavior</div>
+              <code>// Fires 1 query for posts + 500 queries for comments!
+SELECT p FROM Post p;
+// Repeated 500x:
+SELECT * FROM comments WHERE post_id = ?</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Optimized JOIN FETCH Card -->
+        <div class="card card-comparison card-optimized">
+          <div class="card-header">
+            <div class="status-chip chip-success">Optimized JOIN FETCH</div>
+            <div class="endpoint-chip">GET /posts/demo/join-fetch</div>
+          </div>
+          <div class="card-body">
+            <div class="metric-huge text-success" id="joinFetchSqlCount">--</div>
+            <div class="metric-label">SQL Statements Executed</div>
+
+            <div class="metric-row">
+              <span class="m-label">Execution Time:</span>
+              <span class="m-value text-success" id="joinFetchTime">-- ms</span>
+            </div>
+            <div class="metric-row">
+              <span class="m-label">Posts Loaded:</span>
+              <span class="m-value" id="joinFetchPosts">500</span>
+            </div>
+            <div class="metric-row">
+              <span class="m-label">Comments Read:</span>
+              <span class="m-value" id="joinFetchComments">~1,500</span>
+            </div>
+
+            <div class="code-explain">
+              <div class="code-title">Optimized JPQL Query</div>
+              <code>@Query("SELECT DISTINCT p FROM Post p 
+       LEFT JOIN FETCH p.comments 
+       JOIN FETCH p.author")
+List&lt;Post&gt; findAllWithComments();</code>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Comparison Summary Banner -->
+      <div class="summary-banner" id="n1ComparisonBanner">
+        <div class="banner-icon">🎯</div>
+        <div class="banner-content">
+          <h4>Performance Impact Summary</h4>
+          <p id="n1SummaryText">Click "Run Head-to-Head Comparison" above to execute both real queries on the in-memory H2 database and measure the exact statement reduction and latency gain.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: CACHING WITH EHCACHE -->
+    <section id="tab-caching" class="tab-content" role="tabpanel">
+      <div class="section-hero">
+        <div class="hero-text">
+          <div class="badge badge-emerald">Assignment 3</div>
+          <h2>Ehcache 3 In-Memory Acceleration</h2>
+          <p>Read-heavy analytics operations (calculating averages, sums, and rankings across tables) are computationally intensive. Using Spring's <code>@Cacheable</code> and Ehcache, subsequent requests are served straight from RAM in less than 3 ms.</p>
+        </div>
+        <div class="code-snippet-box">
+          <div class="code-header">
+            <span>CachedAnalyticsService.java</span>
+            <span class="code-tag">Spring Cache</span>
+          </div>
+          <pre><code>@Cacheable("analytics")
+public AnalyticsDto getAnalytics() {
+    // 1st call: runs complex queries (simulated 500ms delay)
+    // 2nd call: returns cached DTO instantly from Ehcache
+    return analyticsService.computeAnalytics();
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- Cache Interactive Controls -->
+      <div class="action-card">
+        <div class="action-info">
+          <h3>Cache Experiment Testing Console</h3>
+          <p>Simulates heavy dashboard analytics computation (500ms simulated work). Test cache miss vs cache hit.</p>
+        </div>
+        <div class="action-buttons">
+          <button id="fetchCachedAnalyticsBtn" class="btn btn-emerald">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Fetch Cached Analytics (GET /analytics)
+          </button>
+          <button id="fetchUncachedAnalyticsBtn" class="btn btn-outline">
+            Fetch Uncached Baseline (GET /analytics/uncached)
+          </button>
+          <button id="clearCacheBtn" class="btn btn-danger">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Evict Cache (DELETE /cache)
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Execution Telemetry -->
+      <div class="telemetry-bar">
+        <div class="telemetry-item">
+          <span class="t-label">Last Call Mode</span>
+          <span class="t-value" id="lastCacheMode">Ready to test</span>
+        </div>
+        <div class="telemetry-item">
+          <span class="t-label">Response Latency</span>
+          <span class="t-value highlight-cyan" id="lastCacheLatency">-- ms</span>
+        </div>
+        <div class="telemetry-item">
+          <span class="t-label">Cache State</span>
+          <span class="badge" id="cacheHitBadge">Awaiting call</span>
+        </div>
+        <div class="telemetry-item">
+          <span class="t-label">Speedup Factor</span>
+          <span class="t-value highlight-green" id="cacheSpeedupFactor">--</span>
+        </div>
+      </div>
+
+      <!-- Analytics KPI Cards -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-title">Total Database Posts</div>
+          <div class="kpi-number" id="kpiTotalPosts">--</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">Total Comments</div>
+          <div class="kpi-number" id="kpiTotalComments">--</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">Total Likes Aggregated</div>
+          <div class="kpi-number" id="kpiTotalLikes">--</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">Average Likes Per Post</div>
+          <div class="kpi-number" id="kpiAvgLikes">--</div>
+        </div>
+      </div>
+
+      <!-- Analytics Breakdown: Authors Leaderboard -->
+      <div class="analytics-detail-grid">
+        <div class="card">
+          <div class="card-header">
+            <h3>Top Contributing Authors (Aggregated JPQL)</h3>
+            <span class="endpoint-chip">GROUP BY a.name</span>
+          </div>
+          <div class="card-body">
+            <div id="topAuthorsContainer" class="authors-list">
+              <div class="empty-state">Click "Fetch Cached Analytics" above to compute and populate data.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Ehcache Configuration Architecture</h3>
+            <span class="endpoint-chip">ehcache.xml</span>
+          </div>
+          <div class="card-body">
+            <div class="config-table">
+              <div class="config-row">
+                <span class="c-key">Cache Provider:</span>
+                <span class="c-val">Ehcache 3.10 (JCache JSR-107 compliant)</span>
+              </div>
+              <div class="config-row">
+                <span class="c-key">Active Cache Names:</span>
+                <span class="c-val" id="activeCacheNames">"analytics", "posts"</span>
+              </div>
+              <div class="config-row">
+                <span class="c-key">On-Heap Capacity:</span>
+                <span class="c-val">1,000 entries (heap tier)</span>
+              </div>
+              <div class="config-row">
+                <span class="c-key">Expiry Policy:</span>
+                <span class="c-val">Time-To-Live (TTL) 10 minutes</span>
+              </div>
+              <div class="config-row">
+                <span class="c-key">Eviction Trigger:</span>
+                <span class="c-val"><code>@CacheEvict</code> or <code>DELETE /cache</code></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: NATIVE SQL QUERY -->
+    <section id="tab-native" class="tab-content" role="tabpanel">
+      <div class="section-hero">
+        <div class="hero-text">
+          <div class="badge badge-amber">Assignment 4</div>
+          <h2>Native SQL Query: Top Performing Posts</h2>
+          <p>When query performance is paramount, Spring Data JPA allows bypassing the JPQL abstraction layer to execute optimized native SQL queries directly on the database engine.</p>
+        </div>
+        <div class="code-snippet-box">
+          <div class="code-header">
+            <span>PostRepository.java</span>
+            <span class="code-tag">Native SQL</span>
+          </div>
+          <pre><code>@Query(value = "SELECT * FROM posts 
+       ORDER BY likes DESC LIMIT 5", 
+       nativeQuery = true)
+List&lt;Post&gt; findTopPosts();</code></pre>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <div class="action-card">
+        <div class="action-info">
+          <h3>Top 5 High-Impact Posts Leaderboard</h3>
+          <p>Dispatched directly via <code>GET /posts/top</code> using the <code>nativeQuery = true</code> executor.</p>
+        </div>
+        <button id="fetchTopPostsBtn" class="btn btn-amber">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          Execute Native Query
+        </button>
+      </div>
+
+      <!-- Leaderboard Cards -->
+      <div id="topPostsContainer" class="podium-grid">
+        <div class="loading-spinner">Loading top posts...</div>
+      </div>
+    </section>
+
+    <!-- TAB 5: BENCHMARKING & JMETER -->
+    <section id="tab-benchmarks" class="tab-content" role="tabpanel">
+      <div class="section-hero">
+        <div class="hero-text">
+          <div class="badge badge-indigo">Assignment 5</div>
+          <h2>Performance Benchmarking &amp; Apache JMeter</h2>
+          <p>Validating performance improvements with empirical metrics. Compare response times before and after caching using the in-process benchmark runner or execute concurrent load tests using Apache JMeter.</p>
+        </div>
+      </div>
+
+      <!-- In-Process Benchmark Suite -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <h3>In-Process Performance Benchmark Runner</h3>
+          <div class="benchmark-selector">
+            <label for="benchmarkRunsSelect">Iterations:</label>
+            <select id="benchmarkRunsSelect" class="form-select">
+              <option value="3">3 iterations</option>
+              <option value="5" selected>5 iterations</option>
+              <option value="10">10 iterations</option>
+              <option value="20">20 iterations</option>
+            </select>
+            <button id="runBenchmarkBtn" class="btn btn-primary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Run Benchmark (GET /benchmark/analytics)
+            </button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="benchmark-results-grid" id="benchmarkResults">
+            <div class="benchmark-col">
+              <h4>Without Cache (Database Baseline)</h4>
+              <div class="metric-huge text-danger" id="bmUncachedAvg">-- ms</div>
+              <p class="text-muted">Average Response Time</p>
+              <div class="run-times-list" id="bmUncachedRuns">Runs: [ -- ]</div>
+            </div>
+
+            <div class="benchmark-col">
+              <h4>With Ehcache (Memory Accelerated)</h4>
+              <div class="metric-huge text-success" id="bmCachedAvg">-- ms</div>
+              <p class="text-muted">Average Response Time (Hits)</p>
+              <div class="run-times-list" id="bmCachedRuns">Miss: -- ms &bull; Hits: [ -- ]</div>
+            </div>
+
+            <div class="benchmark-col center-col">
+              <h4>Total Speedup Gain</h4>
+              <div class="metric-huge highlight-green" id="bmSpeedup">-- x</div>
+              <p class="text-muted">Throughput &amp; Latency Multiplier</p>
+              <div class="badge badge-emerald" id="bmEfficiencyBadge">Ready to benchmark</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Apache JMeter Load Testing Instructions -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Apache JMeter Load Testing Plan</h3>
+          <span class="endpoint-chip">jmeter/experiment6-test-plan.jmx</span>
+        </div>
+        <div class="card-body">
+          <div class="jmeter-guide">
+            <div class="jmeter-step">
+              <div class="step-num">1</div>
+              <div class="step-body">
+                <h5>Ensure Backend is Running</h5>
+                <p>Confirm the Spring Boot server is active at <code>http://localhost:8080/</code>.</p>
+              </div>
+            </div>
+            <div class="jmeter-step">
+              <div class="step-num">2</div>
+              <div class="step-body">
+                <h5>Open JMeter Test Plan</h5>
+                <p>Launch Apache JMeter 5.x and open <code>jmeter/experiment6-test-plan.jmx</code>. It is pre-configured with two thread groups comparing uncached baseline vs cached endpoint.</p>
+              </div>
+            </div>
+            <div class="jmeter-step">
+              <div class="step-num">3</div>
+              <div class="step-body">
+                <h5>Run Non-GUI Command Line Test (Alternative)</h5>
+                <p>From the project directory, run:</p>
+                <code>jmeter -n -t jmeter\experiment6-test-plan.jmx -l results.jtl</code>
+              </div>
+            </div>
+            <div class="jmeter-step">
+              <div class="step-num">4</div>
+              <div class="step-body">
+                <h5>Analyze Summary Report</h5>
+                <p>Compare the <strong>Average Latency (ms)</strong>, <strong>Throughput (requests/sec)</strong>, and <strong>Error %</strong> in the Summary Report table to demonstrate scalable read throughput.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <div class="footer-container">
+      <p>Unit 2 &bull; Experiment 6: Scalable Read APIs with Caching &amp; Optimization</p>
+      <div class="footer-tags">
+        <span>Spring Boot 3</span>
+        <span>Hibernate JPA</span>
+        <span>H2 Database</span>
+        <span>Ehcache 3</span>
+        <span>JMeter</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
