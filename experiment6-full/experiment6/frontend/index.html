@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Experiment 6 - Scalable Read APIs Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Experiment 6 - Scalable Read APIs</h1>
+    <p>Pagination &amp; Sorting &middot; Caching &middot; N+1 Fix &middot; Native Query &middot; Benchmarking</p>
+    <span id="status" class="badge">checking backend...</span>
+  </header>
+
+  <div id="error" class="error" hidden></div>
+
+  <main>
+    <!-- Assignment 1 -->
+    <section class="card wide">
+      <h2>1. Post Feed <small>(Pagination &amp; Sorting) &mdash; GET /posts</small></h2>
+      <div class="controls">
+        <label>Sort by
+          <select id="sortField">
+            <option value="createdAt">createdAt</option>
+            <option value="likes">likes</option>
+            <option value="title">title</option>
+            <option value="id">id</option>
+          </select>
+        </label>
+        <label>Direction
+          <select id="sortDir">
+            <option value="desc">desc</option>
+            <option value="asc">asc</option>
+          </select>
+        </label>
+        <label>Page size
+          <select id="pageSize">
+            <option>5</option><option selected>10</option><option>20</option><option>50</option>
+          </select>
+        </label>
+      </div>
+      <table>
+        <thead><tr><th>ID</th><th>Title</th><th>Author</th><th>Likes</th><th>Created</th></tr></thead>
+        <tbody id="postsBody"><tr><td colspan="5">Loading...</td></tr></tbody>
+      </table>
+      <div class="pager">
+        <button id="prevBtn">&laquo; Prev</button>
+        <span id="pageInfo"></span>
+        <button id="nextBtn">Next &raquo;</button>
+      </div>
+    </section>
+
+    <!-- Assignment 3 -->
+    <section class="card">
+      <h2>2. Caching <small>(Ehcache) &mdash; GET /analytics</small></h2>
+      <div class="buttons">
+        <button id="uncachedBtn">Call UNCACHED</button>
+        <button id="cachedBtn" class="primary">Call CACHED</button>
+        <button id="clearBtn" class="danger">Clear cache</button>
+      </div>
+      <p class="hint">Click CACHED twice: first call is a cache miss (slow), later calls are cache hits (fast).</p>
+      <div id="timeBars"></div>
+      <div id="analyticsSummary" class="summary"></div>
+    </section>
+
+    <!-- Assignment 2 -->
+    <section class="card">
+      <h2>3. N+1 Problem <small>&mdash; JOIN FETCH fix</small></h2>
+      <button id="nplusBtn" class="primary">Run comparison</button>
+      <table id="nplusTable" hidden>
+        <thead><tr><th>Strategy</th><th>SQL statements</th><th>Time (ms)</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="hint">Hibernate statistics count the real SQL statements executed.</p>
+    </section>
+
+    <!-- Assignment 4 -->
+    <section class="card">
+      <h2>4. Top Posts <small>(Native SQL) &mdash; GET /posts/top</small></h2>
+      <button id="topBtn" class="primary">Load top 5</button>
+      <ol id="topList"></ol>
+    </section>
+
+    <!-- Assignment 5 -->
+    <section class="card">
+      <h2>5. Benchmark <small>&mdash; GET /benchmark/analytics</small></h2>
+      <button id="benchBtn" class="primary">Run benchmark (5 runs)</button>
+      <div id="benchResult" class="summary"></div>
+      <p class="hint">For load testing with many users, use the JMeter plan in backend/jmeter.</p>
+    </section>
+  </main>
+
+  <footer>Frontend (HTML/CSS/JS) &rarr; Backend (Spring Boot) at <code id="apiBase"></code></footer>
+  <script src="app.js"></script>
+</body>
+</html>
